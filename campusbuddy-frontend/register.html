@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Register - CampusBuddy</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <h1 class="center">Campus<span class="highlight">Buddy</span></h1>
+    <h2 class="center">Register</h2>
+    <form id="registerForm">
+      <label for="email">Email</label>
+      <input type="email" id="email" placeholder="Email" required />
+      <label for="password">Password</label>
+      <input type="password" id="password" placeholder="Password" required />
+      <button type="submit" class="btn">Register</button>
+    </form>
+    <div id="message" class="center"></div>
+    <div class="actions center">
+      <p>Already have an account? <a href="login.html">Login</a></p>
+    </div>
+  </div>
+  <script>
+    document.getElementById('registerForm').onsubmit = async function(e) {
+      e.preventDefault();
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const messageDiv = document.getElementById('message');
+      messageDiv.textContent = '';
+      messageDiv.className = 'center';
+      try {
+        const res = await fetch('http://localhost:3000/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          messageDiv.textContent = 'Registration successful! Redirecting to login...';
+          messageDiv.classList.add('message-success');
+          setTimeout(() => {
+            window.location.href = 'login.html';
+          }, 1200);
+        } else {
+          messageDiv.textContent = data.message || 'Registration failed';
+          messageDiv.classList.add('message-error');
+        }
+      } catch (err) {
+        messageDiv.textContent = 'Network error. Please try again.';
+        messageDiv.classList.add('message-error');
+      }
+    };
+  </script>
+</body>
+</html>

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Dashboard - CampusBuddy</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- For icons, use Unicode emojis for simplicity -->
+</head>
+<body>
+  <div class="container">
+    <h1 class="center">Campus<span class="highlight">Buddy</span> Dashboard</h1>
+    <div id="welcome" class="center"></div>
+    <button class="create-btn" onclick="window.location.href='assignments.html'">+ Create Assignment</button>
+    <div id="stats" class="dashboard-stats"></div>
+    <div class="progress-label" id="progressLabel"></div>
+    <div class="progress-bar-container">
+      <div class="progress-bar" id="progressBar" style="width:0%"></div>
+    </div>
+    <h2>Upcoming Assignments</h2>
+    <ul id="upcomingList" class="assignment-list"></ul>
+    <div class="actions center">
+      <a href="assignments.html" class="btn">View All Assignments</a>
+      <button onclick="logout()" class="btn secondary">Logout</button>
+    </div>
+  </div>
+  <script>
+    function logout() {
+      localStorage.removeItem('token');
+      window.location.href = 'login.html';
+    }
+
+    let assignmentsData = [];
+    let currentFilter = null;
+
+    async function fetchAssignments() {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        document.getElementById('welcome').textContent = 'Please log in first!';
+        setTimeout(() => window.location.href = 'login.html', 1200);
+        return;
+      }
+      // Show user email from token (if JWT payload includes it)
+      let userEmail = '';
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        userEmail = payload.email || '';
+      } catch {}
+      document.getElementById('welcome').innerHTML = userEmail ? `Welcome, <b>${userEmail}</b>!` : '';
+
+      const res = await fetch('http://localhost:3000/api/assignments', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      const data = await res.json();
+      if (!Array.isArray(data)) {
+        document.getElementById('stats').textContent = 'Could not load assignments.';
+        return;
+      }
+      assignmentsData = data;
+      renderDashboard();
+    }
+
+    function renderDashboard() {
+      const data = assignmentsData;
+      // Calculate stats
+      const total = data.length;
+      const completed = data.filter(a => a.completed).length;
+      const pending = data.filter(a => !a.completed).length;
+      const today = new Date().toISOString().slice(0, 10);
+      const overdue = data.filter(a => !a.completed && a.dueDate && a.dueDate.slice(0,10) < today).length;
+      // Progress
+      const percent = total === 0 ? 0 : Math.round((completed / total) * 100);
+      document.getElementById('progressBar').style.width = percent + '%';
+      document.getElementById('progressLabel').textContent = `Progress: ${percent}% completed`;
+      // Stat cards with icons and click filters
+      document.getElementById('stats').innerHTML = `
+        <div class="stat-card stat-total" onclick="filterAssignments('all')">
+          <span class="stat-icon">Total</span>
+          <div>Total</div>
+          <b>${total}</b>
+        </div>
+        <div class="stat-card stat-pending" onclick="filterAssignments('pending')">
+          <span class="stat-icon">Pending</span>
+          <div>Pending</div>
+          <b>${pending}</b>
+        </div>
+        <div class="stat-card stat-completed" onclick="filterAssignments('completed')">
+          <span class="stat-icon">Completed</span>
+          <div>Completed</div>
+          <b>${completed}</b>
+        </div>
+        <div class="stat-card stat-overdue" onclick="filterAssignments('overdue')">
+          <span class="stat-icon">Overdue</span>
+          <div>Overdue</div>
+          <b>${overdue}</b>
+        </div>
+      `;
+      renderUpcoming();
+    }
+
+    function renderUpcoming() {
+      let filtered = assignmentsData;
+      const today = new Date().toISOString().slice(0, 10);
+      if (currentFilter === 'pending') {
+        filtered = filtered.filter(a => !a.completed);
+      } else if (currentFilter === 'completed') {
+        filtered = filtered.filter(a => a.completed);
+      } else if (currentFilter === 'overdue') {
+        filtered = filtered.filter(a => !a.completed && a.dueDate && a.dueDate.slice(0,10) < today);
+      }
+      // Upcoming: next 3 by due date, only pending
+      let upcoming = filtered.filter(a => !a.completed && a.dueDate)
+        .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
+        .slice(0, 3);
+      // If filter is completed, show 3 most recently completed
+      if (currentFilter === 'completed') {
+        upcoming = filtered.filter(a => a.completed && a.dueDate)
+          .sort((a, b) => new Date(b.dueDate) - new Date(a.dueDate))
+          .slice(0, 3);
+      }
+      const list = document.getElementById('upcomingList');
+      list.innerHTML = '';
+      if (upcoming.length === 0) {
+        list.innerHTML = '<li>No assignments found for this filter!</li>';
+      } else {
+        upcoming.forEach(a => {
+          const isOverdue = a.dueDate && a.dueDate.slice(0,10) < today;
+          list.innerHTML += `
+            <li class="assignment-card">
+              <div class="assignment-title">${a.title}</div>
+              <div class="assignment-desc">${a.description || ''}</div>
+              <div class="assignment-meta">
+                <span class="due-date${isOverdue ? ' overdue' : ''}">Due: ${a.dueDate ? a.dueDate.substring(0,10) : ''}</span>
+                <span class="assignment-status ${a.completed ? 'completed' : 'pending'}">
+                  <span class="status-dot"></span> ${a.completed ? 'Completed' : (isOverdue ? 'Overdue' : 'Pending')}
+                </span>
+              </div>
+            </li>
+          `;
+        });
+      }
+    }
+
+    // Make stat cards clickable for filtering
+    window.filterAssignments = function(type) {
+      currentFilter = (type === 'all') ? null : type;
+      renderUpcoming();
+      // Optionally, scroll to upcoming list
+      document.getElementById('upcomingList').scrollIntoView({ behavior: 'smooth' });
+    };
+
+    fetchAssignments();
+  </script>
+</body>
+</html> 
